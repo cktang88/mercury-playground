@@ -1,7 +1,7 @@
 {
   "name": "mercury-playground",
   "version": "1.0.0",
-  "description": "Playground for Inception Mercury 3 and Mercury 2.5, with side-by-side comparison",
+  "description": "Playground for Inception Mercury 3 and Mercury 2.5 (via Inception or OpenRouter), with side-by-side comparison",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

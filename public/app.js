@@ -1,5 +1,6 @@
 // Per-1M-token prices from https://docs.inceptionlabs.ai/get-started/models
 // (mercury-3 is at 50%-off launch pricing; regular is $0.20 / $0.02 / $0.70).
+// Only used for Inception; OpenRouter reports the actual charge in usage.cost.
 const MODELS = {
   'mercury-3': { label: 'Mercury 3', input: 0.10, cached: 0.01, output: 0.35, defaultEffort: 'low' },
   'mercury-2.5': { label: 'Mercury 2.5', input: 0.20, cached: 0.02, output: 0.75, defaultEffort: 'medium' }
@@ -20,6 +21,7 @@ const usageTable = document.getElementById('usage-table');
 const statusDot = document.querySelector('.status-dot');
 const statusText = document.querySelector('.status-text');
 const connectionStatus = document.getElementById('connection-status');
+const diffusingRow = document.getElementById('diffusing-row');
 const viewButtons = document.querySelectorAll('.view-toggle button');
 
 // Each model keeps its own history so its prompt prefix only ever grows by appending,
@@ -45,6 +47,7 @@ function createPane(model) {
     output: el.querySelector('.chat-output'),
     stats: el.querySelector('.pane-stats'),
     history: [],
+    sessionId: crypto.randomUUID(),
     totals: { requests: 0, prompt: 0, cached: 0, completion: 0, reasoning: 0, cost: 0 }
   };
 }
@@ -98,13 +101,29 @@ async function checkStatus() {
     } else {
       statusText.textContent = 'Checking API...';
     }
-    connectionStatus.textContent = 'Connected';
+    connectionStatus.textContent = data.provider ? `via ${data.provider}` : 'Connected';
+    applyProvider(data);
   } catch {
     statusDot.classList.remove('connected');
     statusDot.classList.add('error');
     statusText.textContent = 'Not responding';
     connectionStatus.textContent = 'Not responding';
   }
+}
+
+let providerName = null;
+
+// Effort values and diffusing differ between Inception and OpenRouter.
+function applyProvider({ provider, efforts, diffusing }) {
+  if (!provider || provider === providerName) return;
+  providerName = provider;
+  const selected = effortSelect.value;
+  effortSelect.innerHTML = '<option value="">Model default</option>' + efforts.map(e =>
+    `<option value="${e}">${e[0].toUpperCase() + e.slice(1)}</option>`).join('');
+  effortSelect.value = efforts.includes(selected) ? selected : '';
+  diffusingInput.disabled = !diffusing;
+  if (!diffusing) diffusingInput.checked = false;
+  diffusingRow.title = diffusing ? '' : `Not supported via ${provider}`;
 }
 
 checkStatus();
@@ -114,6 +133,7 @@ function newChat() {
   if (isStreaming) return;
   for (const pane of panes) {
     pane.history = [];
+    pane.sessionId = crypto.randomUUID();
     pane.output.innerHTML = '';
     pane.stats.textContent = 'No requests yet';
   }
@@ -177,7 +197,7 @@ async function streamReply(pane, settings) {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: pane.model, messages: pane.history, ...settings })
+      body: JSON.stringify({ model: pane.model, messages: pane.history, session_id: pane.sessionId, ...settings })
     });
 
     if (!res.ok) {
@@ -203,6 +223,8 @@ async function streamReply(pane, settings) {
         if (data === '[DONE]') continue;
         let json;
         try { json = JSON.parse(data); } catch { continue; }
+        // OpenRouter reports errors after the stream has started as an `error` chunk.
+        if (json.error) throw new Error(json.error.message || JSON.stringify(json.error));
         if (json.usage) usage = json.usage;
         const delta = json.choices?.[0]?.delta?.content;
         if (delta) {
@@ -242,7 +264,8 @@ function recordStats(pane, usage, start, firstToken, end) {
   const completion = usage.completion_tokens || 0;
   const reasoning = usage.completion_tokens_details?.reasoning_tokens ?? usage.reasoning_tokens ?? 0;
   const price = MODELS[pane.model];
-  const cost = ((prompt - cached) * price.input + cached * price.cached + completion * price.output) / 1e6;
+  const cost = typeof usage.cost === 'number' ? usage.cost
+    : ((prompt - cached) * price.input + cached * price.cached + completion * price.output) / 1e6;
   const tps = completion / (totalMs / 1000);
 
   Object.assign(pane.totals, {

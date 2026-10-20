@@ -73,7 +73,7 @@
           <label for="max-tokens">Max completion tokens</label>
           <input type="number" id="max-tokens" placeholder="default" min="1" max="131072" />
         </div>
-        <div class="setting-row">
+        <div class="setting-row" id="diffusing-row">
           <label for="diffusing">Diffusion effect</label>
           <input type="checkbox" id="diffusing" />
         </div>
@@ -82,7 +82,7 @@
       <div class="context-card">
         <h3>Session usage</h3>
         <div id="usage-table"></div>
-        <small class="hint">Prefix caching is automatic. History is sent unchanged each turn, so earlier turns are served from cache.</small>
+        <small class="hint">Cost is OpenRouter's reported charge, or an estimate from list prices on Inception. Prefix caching is automatic. History is sent unchanged each turn, so earlier turns are served from cache.</small>
       </div>
     </aside>
   </div>
