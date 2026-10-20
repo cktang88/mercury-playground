@@ -1,7 +1,7 @@
 {
   "name": "mercury-playground",
   "version": "1.0.0",
-  "description": "Mercury 2.5 Playground",
+  "description": "Mercury 3 / 2.5 Playground",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
