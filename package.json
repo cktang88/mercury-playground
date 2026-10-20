@@ -1,7 +1,7 @@
 {
   "name": "mercury-playground",
   "version": "1.0.0",
-  "description": "Mercury 3 / 2.5 Playground",
+  "description": "Playground for Inception Mercury 3 and Mercury 2.5, with side-by-side comparison",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,5 +11,8 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
