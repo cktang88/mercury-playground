@@ -1,13 +1,14 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const config = require('./config');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Chat models offered by the playground (https://docs.inceptionlabs.ai/get-started/models)
-const CHAT_MODELS = ['mercury-3', 'mercury-2.5', 'mercury-2'];
-const DEFAULT_MODEL = 'mercury-3';
+// Models, effort values and defaults live in config.js.
+const CHAT_MODELS = Object.keys(config.models);
+const DEFAULT_MODEL = config.paneModels[0];
 
 // Inception is used when its key is set; otherwise OpenRouter, which serves the same
 // models from Inception under an `inception/` prefix (https://openrouter.ai/inception).
@@ -17,18 +18,14 @@ const PROVIDERS = {
     url: process.env.INCEPTION_API_URL || 'https://api.inceptionlabs.ai/v1/chat/completions',
     key: process.env.INCEPTION_API_KEY,
     modelId: model => model,
-    // https://docs.inceptionlabs.ai/capabilities/reasoning-efforts
-    efforts: ['instant', 'low', 'medium', 'high'],
-    diffusing: true
+    ...config.providers.inception
   },
   openrouter: {
     name: 'OpenRouter',
     url: process.env.OPENROUTER_API_URL || 'https://openrouter.ai/api/v1/chat/completions',
     key: process.env.OPENROUTER_API_KEY,
     modelId: model => `inception/${model}`,
-    // `reasoning.supported_efforts` for inception/* in GET /api/v1/models
-    efforts: ['none', 'low', 'medium', 'high'],
-    diffusing: false,
+    ...config.providers.openrouter,
     // Optional attribution headers (https://openrouter.ai/docs/api_reference/authentication)
     headers: { 'X-OpenRouter-Title': 'Mercury Playground' }
   }
@@ -63,7 +60,8 @@ function buildRequest(body, stream) {
     max_completion_tokens,
     reasoning_effort,
     diffusing,
-    session_id
+    session_id,
+    web_search
   } = body;
 
   if (!CHAT_MODELS.includes(model)) {
@@ -75,7 +73,8 @@ function buildRequest(body, stream) {
 
   const payload = { model: provider.modelId(model), messages, stream };
   // Mercury accepts temperature 0.5-1.0; anything else is reset server-side with a warning.
-  if (typeof temperature === 'number') payload.temperature = Math.min(1, Math.max(0.5, temperature));
+  const { min, max } = config.temperature;
+  if (typeof temperature === 'number') payload.temperature = Math.min(max, Math.max(min, temperature));
   if (Number.isInteger(max_completion_tokens) && max_completion_tokens > 0) {
     payload.max_completion_tokens = max_completion_tokens;
   }
@@ -87,7 +86,7 @@ function buildRequest(body, stream) {
     if (stream) {
       // Final chunk carries usage, incl. prompt_tokens_details.cached_tokens.
       payload.stream_options = { include_usage: true };
-      if (diffusing) payload.diffusing = true;
+      if (diffusing && provider.diffusing) payload.diffusing = true;
     }
   } else {
     // OpenRouter always returns usage (incl. cached_tokens and cost) in the last chunk.
@@ -96,8 +95,31 @@ function buildRequest(body, stream) {
     if (typeof session_id === 'string' && session_id.length > 0 && session_id.length <= 256) {
       payload.session_id = session_id;
     }
+    const tool = webSearchTool(web_search);
+    if (tool) payload.tools = [tool];
   }
   return payload;
+}
+
+// Builds the `openrouter:web_search` server tool. The model decides when to search;
+// OpenRouter runs the search and feeds results back to it within the same request.
+// https://openrouter.ai/docs/guides/features/server-tools/web-search
+function webSearchTool(options) {
+  const defaults = provider.webSearch;
+  const { enabled = defaults.enabled, engine = defaults.engine, mode, max_results = defaults.maxResults } = options || {};
+  if (!enabled) return null;
+  if (!defaults.engines.includes(engine)) throw new Error(`Unknown web search engine "${engine}"`);
+
+  const parameters = { engine };
+  const modes = defaults.modes[engine];
+  if (modes && mode) {
+    if (!modes.includes(mode)) throw new Error(`Unknown ${engine} search mode "${mode}". Expected one of: ${modes.join(', ')}`);
+    parameters.mode = mode;
+  } else if (modes?.includes(defaults.mode)) {
+    parameters.mode = defaults.mode;
+  }
+  if (Number.isInteger(max_results)) parameters.max_results = Math.min(25, Math.max(1, max_results));
+  return { type: 'openrouter:web_search', parameters };
 }
 
 app.post('/api/chat', async (req, res) => {
@@ -117,7 +139,8 @@ app.post('/api/chat', async (req, res) => {
     model: payload.model,
     messages: payload.messages.length,
     reasoning_effort: payload.reasoning_effort || payload.reasoning?.effort || '(default)',
-    diffusing: !!payload.diffusing
+    diffusing: !!payload.diffusing,
+    web_search: payload.tools ? JSON.stringify(payload.tools[0].parameters) : 'off'
   });
 
   // Stop generating (and billing) if the browser goes away mid-stream.
@@ -180,17 +203,24 @@ async function listModels() {
   return { ok: true, models: CHAT_MODELS.filter(m => ids.includes(provider.modelId(m))) };
 }
 
+// Settings the UI needs: models, temperature range, and what the active provider supports.
+app.get('/api/config', (req, res) => {
+  res.json({
+    provider: provider?.name || null,
+    models: config.paneModels.map(id => ({ id, ...config.models[id] })),
+    temperature: config.temperature,
+    efforts: provider?.efforts || [],
+    defaultEffort: provider?.defaultEffort || '',
+    diffusing: !!provider?.diffusing,
+    webSearch: provider?.webSearch || null
+  });
+});
+
 app.get('/api/health', async (req, res) => {
   if (!provider) {
     return res.json({ status: 'ok', apiKeyConfigured: false, modelsAvailable: false, models: [] });
   }
-  const info = {
-    provider: provider.name,
-    endpoint: provider.url,
-    efforts: provider.efforts,
-    diffusing: provider.diffusing,
-    apiKeyConfigured: true
-  };
+  const info = { provider: provider.name, endpoint: provider.url, apiKeyConfigured: true };
   try {
     const { ok, models } = await listModels();
     res.json({ status: 'ok', ...info, modelsAvailable: ok, models });

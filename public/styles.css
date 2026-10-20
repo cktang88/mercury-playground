@@ -407,6 +407,30 @@ body {
   margin-top: 8px;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+.hint code {
+  font-size: 11px;
+}
+
+/* Web search citations */
+.citations {
+  margin: 8px 0 0 36px;
+  font-size: 12px;
+  color: #777;
+}
+
+.citations a {
+  color: #8ab4f8;
+  text-decoration: none;
+}
+
+.citations a:hover {
+  text-decoration: underline;
+}
+
 /* Usage */
 #usage-table table {
   width: 100%;

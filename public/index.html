@@ -15,11 +15,7 @@
           <p class="model-info">Diffusion LLM • <span id="connection-status">checking...</span></p>
         </div>
         <div class="header-actions">
-          <div class="view-toggle" role="tablist" aria-label="View">
-            <button data-view="mercury-3" role="tab">Mercury 3</button>
-            <button data-view="mercury-2.5" role="tab">Mercury 2.5</button>
-            <button data-view="compare" role="tab">Side by side</button>
-          </div>
+          <div id="view-toggle" class="view-toggle" role="tablist" aria-label="View"></div>
           <button id="new-chat-btn" class="ghost-btn">New chat</button>
         </div>
       </header>
@@ -56,18 +52,12 @@
         </div>
         <div class="setting-row">
           <label for="reasoning-effort">Reasoning effort</label>
-          <select id="reasoning-effort">
-            <option value="">Model default</option>
-            <option value="instant">Instant</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
+          <select id="reasoning-effort"></select>
         </div>
         <div class="setting-row">
           <label for="temperature">Temperature</label>
-          <input type="range" id="temperature" min="0.5" max="1" step="0.05" value="1" />
-          <output id="temp-value">1</output>
+          <input type="range" id="temperature" />
+          <output id="temp-value"></output>
         </div>
         <div class="setting-row">
           <label for="max-tokens">Max completion tokens</label>
@@ -79,10 +69,32 @@
         </div>
       </div>
 
+      <div class="context-card" id="search-card" hidden>
+        <h3>Web search</h3>
+        <div class="setting-row">
+          <label for="search-enabled">Enabled</label>
+          <input type="checkbox" id="search-enabled" />
+        </div>
+        <div class="setting-row">
+          <label for="search-engine">Engine</label>
+          <select id="search-engine"></select>
+        </div>
+        <div class="setting-row" id="search-mode-row">
+          <label for="search-mode">Mode</label>
+          <select id="search-mode"></select>
+        </div>
+        <div class="setting-row">
+          <label for="search-max-results">Max results</label>
+          <input type="number" id="search-max-results" min="1" max="25" />
+        </div>
+        <small id="search-hint" class="hint"></small>
+        <small class="hint">OpenRouter's <code>openrouter:web_search</code> tool. The model decides when to search; each search is billed by OpenRouter.</small>
+      </div>
+
       <div class="context-card">
         <h3>Session usage</h3>
         <div id="usage-table"></div>
-        <small class="hint">Cost is OpenRouter's reported charge, or an estimate from list prices on Inception. Prefix caching is automatic. History is sent unchanged each turn, so earlier turns are served from cache.</small>
+        <small class="hint">Cost is OpenRouter's reported charge (including searches), or an estimate from list prices on Inception. Prefix caching is automatic. History is sent unchanged each turn, so earlier turns are served from cache.</small>
       </div>
     </aside>
   </div>
